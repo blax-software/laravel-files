@@ -1,0 +1,30 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create(config('files.table_names.files', 'files'), function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->unsignedBigInteger('user_id')->nullable()->index();
+            $table->string('name')->nullable();
+            $table->string('type')->nullable();
+            $table->string('extension')->nullable();
+            $table->unsignedBigInteger('size')->nullable();
+            $table->string('disk')->default(config('files.disk', 'local'));
+            $table->string('relativepath')->nullable();
+            $table->json('meta')->nullable();
+            $table->timestamp('last_accessed_at')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists(config('files.table_names.files', 'files'));
+    }
+};

@@ -1,0 +1,72 @@
+{
+    "name": "blax-software/laravel-files",
+    "type": "library",
+    "description": "Universal Laravel file management system — upload, optimize, serve, and attach files to any model.",
+    "keywords": [
+        "files",
+        "upload",
+        "media",
+        "image",
+        "optimization",
+        "warehouse",
+        "chunk-upload",
+        "laravel",
+        "blax"
+    ],
+    "homepage": "http://www.blax.at",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Fabian Wagner",
+            "email": "fabian@blax.at",
+            "homepage": "https://www.blax.at",
+            "role": "Developer"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Blax\\Files\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Blax\\Files\\Tests\\": "tests",
+            "Workbench\\App\\": "workbench/app",
+            "Workbench\\Database\\Factories\\": "workbench/database/factories"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "require": {
+        "php": "^8.1",
+        "blax-software/laravel-workkit": "*",
+        "illuminate/container": "^9.0|^10.0|^11.0|^12.0",
+        "illuminate/contracts": "^9.0|^10.0|^11.0|^12.0",
+        "illuminate/database": "^9.0|^10.0|^11.0|^12.0",
+        "illuminate/http": "^9.0|^10.0|^11.0|^12.0",
+        "illuminate/routing": "^9.0|^10.0|^11.0|^12.0",
+        "illuminate/support": "^9.0|^10.0|^11.0|^12.0"
+    },
+    "require-dev": {
+        "laravel/framework": "*",
+        "laravel/pint": "^1.22",
+        "orchestra/testbench": "^10.4",
+        "phpunit/phpunit": "^12.2",
+        "spatie/image": "^3.8"
+    },
+    "suggest": {
+        "blax-software/laravel-roles": "For access control on files via roles & permissions.",
+        "blax-software/laravel-websockets": "For real-time chunk upload progress via WebSockets.",
+        "spatie/image": "Required for automatic image optimization and resizing (^3.8)."
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Blax\\Files\\FilesServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
