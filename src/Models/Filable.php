@@ -3,10 +3,13 @@
 namespace Blax\Files\Models;
 
 use Blax\Files\Enums\FileLinkType;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
 
 class Filable extends MorphPivot
 {
+    use HasUuids;
+
     protected $fillable = [
         'file_id',
         'filable_id',
