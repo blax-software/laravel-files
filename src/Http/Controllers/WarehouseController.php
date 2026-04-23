@@ -2,6 +2,8 @@
 
 namespace Blax\Files\Http\Controllers;
 
+use Blax\Files\Events\FileAccessed;
+use Blax\Files\Events\FileNotFound;
 use Blax\Files\Models\File;
 use Blax\Files\Services\WarehouseService;
 use Illuminate\Http\Request;
@@ -16,6 +18,7 @@ class WarehouseController extends Controller
         $file = WarehouseService::searchFile($request, $identifier);
 
         if (! $file) {
+            FileNotFound::dispatch($identifier, $request);
             abort(404);
         }
 
@@ -23,6 +26,8 @@ class WarehouseController extends Controller
         if (config('files.access_control.enabled') && $file->exists) {
             $this->checkAccess($request, $file);
         }
+
+        FileAccessed::dispatch($file, $request);
 
         return $file->respond($request);
     }
