@@ -318,6 +318,10 @@ class File extends Model
             cached: $cached,
             quality: $quality,
             position: $position,
+            canvasX: $request->get('canvasX'),
+            canvasY: $request->get('canvasY'),
+            offsetX: (int) $request->get('x', 0),
+            offsetY: (int) $request->get('y', 0),
         );
     }
 
@@ -329,26 +333,44 @@ class File extends Model
         bool $cached = true,
         ?int $quality = null,
         string $position = 'cover',
+        string|int|null $canvasX = null,
+        string|int|null $canvasY = null,
+        int $offsetX = 0,
+        int $offsetY = 0,
     ): string {
         $path = $this->path;
-        $ext = strtolower($this->extension ?? pathinfo($path, PATHINFO_EXTENSION));
+
+        // Resolve / backfill extension via MIME sniff when missing on the model.
+        $ext = strtolower($this->extension ?? '');
+        if (! $ext && file_exists($path)) {
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $ext = explode('/', $finfo->file($path))[1] ?? pathinfo($path, PATHINFO_EXTENSION);
+        }
+        $ext = strtolower($ext);
+
+        // Animated / vector formats have no meaningful resize — return source.
+        if (in_array($ext, ['gif', 'svg', 'svg+xml'], true)) {
+            return $path;
+        }
 
         // Normalize dimensions
-        if ($width !== null && strtolower((string) $width) !== 'auto') {
-            $width = max(1, (int) $width);
-        }
-        if ($height !== null && strtolower((string) $height) !== 'auto') {
-            $height = max(1, (int) $height);
+        $autoW = is_string($width) && strtolower($width) === 'auto';
+        $autoH = is_string($height) && strtolower($height) === 'auto';
+        $width = $autoW ? 'auto' : (int) ($width ?: $height ?: 0);
+        $height = $autoH ? 'auto' : (int) ($height ?: $width ?: 0);
+        if ($width === 0 && $height === 0) {
+            return $path;
         }
 
-        $width = $width ?: $height;
-        $height = $height ?: $width;
-
-        // Round to nearest step
-        $roundTo = config('files.optimization.round_to', 50);
-        if ($rounding) {
-            $width = ($width === 'auto') ? $width : (int) (ceil((int) $width / $roundTo) * $roundTo);
-            $height = ($height === 'auto') ? $height : (int) (ceil((int) $height / $roundTo) * $roundTo);
+        // Round to nearest step (caches fewer permutations)
+        $roundTo = (int) config('files.optimization.round_to', 50);
+        if ($rounding && $roundTo > 0) {
+            if ($width !== 'auto') {
+                $width = (int) (ceil($width / $roundTo) * $roundTo);
+            }
+            if ($height !== 'auto') {
+                $height = (int) (ceil($height / $roundTo) * $roundTo);
+            }
         }
 
         // Build cache key
@@ -365,42 +387,130 @@ class File extends Model
         if ($quality !== null && $quality > 0 && $quality < 100) {
             $cacheKey .= '.q' . $quality;
         }
+        if ($canvasX || $canvasY) {
+            $cacheKey .= '.c' . ($canvasX ?: 0) . 'x' . ($canvasY ?: 0);
+        }
+        if ($offsetX || $offsetY) {
+            $cacheKey .= '.o' . $offsetX . 'x' . $offsetY;
+        }
 
         $cachedPath = $resizedDir . '/' . basename($path, '.' . $ext) . '.' . $cacheKey . '.' . $ext;
         if ($toWebp && $this->isImage()) {
             $cachedPath .= '.webp';
         }
 
-        // Return cached version if available
+        // Cache hit — touch mtime for LRU-style cleanup commands.
         if ($cached && file_exists($cachedPath)) {
+            @touch($cachedPath);
+
             return $cachedPath;
         }
 
-        // Generate resized version
-        copy($path, $cachedPath);
+        // Write to a temp file and atomically rename into place. A concurrent
+        // request must never observe a partially-written cache file, otherwise
+        // downstream decoders will serve broken bytes (IDAT CRC errors on PNG,
+        // truncated zlib on WebP, etc.).
+        $pi = pathinfo($cachedPath);
+        $tmpPath = $pi['dirname'] . '/' . $pi['filename']
+            . '.tmp-' . bin2hex(random_bytes(4))
+            . (isset($pi['extension']) ? '.' . $pi['extension'] : '');
 
-        $fit = match ($position) {
-            'contain' => \Spatie\Image\Enums\Fit::Contain,
-            'fill'    => \Spatie\Image\Enums\Fit::Fill,
-            'max'     => \Spatie\Image\Enums\Fit::Max,
-            'stretch' => \Spatie\Image\Enums\Fit::Stretch,
-            default   => \Spatie\Image\Enums\Fit::Crop,
-        };
+        try {
+            copy($path, $tmpPath);
 
-        $image = \Spatie\Image\Image::load($cachedPath)
-            ->fit(
-                $fit,
-                ($width === 'auto') ? null : (int) $width,
-                ($height === 'auto') ? null : (int) $height,
-            );
+            // Some PNGs in storage ship with a miscomputed IDAT CRC, or were
+            // uploaded truncated. Browsers decode them fine but libpng (used by
+            // both GD and ImageMagick) refuses. Make a best-effort attempt to
+            // rewrite the tmp file via a lenient decoder before passing to
+            // Spatie, so intact-but-pedantically-invalid PNGs still resize.
+            if ($ext === 'png') {
+                $this->healCorruptPng($tmpPath);
+            }
 
-        if ($quality !== null && $quality > 0) {
-            $image->quality(min(100, max(1, $quality)));
+            $fit = match ($position) {
+                'contain' => \Spatie\Image\Enums\Fit::Contain,
+                'fill'    => \Spatie\Image\Enums\Fit::Fill,
+                'max'     => \Spatie\Image\Enums\Fit::Max,
+                'stretch' => \Spatie\Image\Enums\Fit::Stretch,
+                default   => \Spatie\Image\Enums\Fit::Crop,
+            };
+
+            $image = \Spatie\Image\Image::load($tmpPath)
+                ->fit(
+                    $fit,
+                    ($width === 'auto') ? null : (int) $width,
+                    ($height === 'auto') ? null : (int) $height,
+                );
+
+            if ($canvasX || $canvasY) {
+                $cWidth = $canvasX ? (int) $canvasX : (int) $width;
+                $cHeight = $canvasY ? (int) $canvasY : (int) $height;
+                $image->resizeCanvas(
+                    $cWidth,
+                    $cHeight,
+                    \Spatie\Image\Enums\AlignPosition::Center,
+                );
+            }
+
+            if ($quality !== null && $quality > 0) {
+                $image->quality(min(100, max(1, $quality)));
+            }
+
+            $image->save($tmpPath);
+
+            rename($tmpPath, $cachedPath);
+        } catch (\Throwable $e) {
+            if (isset($tmpPath) && file_exists($tmpPath)) {
+                @unlink($tmpPath);
+            }
+
+            // Unrecoverable decode failure — typically a truncated upload.
+            // Fall back to the original bytes so the caller still gets a 200
+            // and the browser renders whatever it can, instead of a 500.
+            if (function_exists('logger')) {
+                logger()->warning('laravel-files: resize failed; serving original as fallback', [
+                    'file'  => $path,
+                    'size'  => $width . 'x' . $height,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            return $path;
         }
 
-        $image->save($cachedPath);
-
         return $cachedPath;
+    }
+
+    /**
+     * Attempt to rewrite a PNG file with valid CRCs, using whichever lenient
+     * decoder is available. Silently no-ops on failure — the caller will
+     * handle that via the normal fallback path.
+     */
+    protected function healCorruptPng(string $path): void
+    {
+        if (function_exists('imagecreatefrompng')) {
+            $gd = @imagecreatefrompng($path);
+            if ($gd !== false) {
+                imagesavealpha($gd, true);
+                imagepng($gd, $path);
+                imagedestroy($gd);
+
+                return;
+            }
+        }
+
+        if (class_exists(\Imagick::class)) {
+            try {
+                $pre = new \Imagick;
+                $pre->setOption('png:preserve-corrupt-image', 'true');
+                $pre->readImage($path);
+                $pre->setImageFormat('png');
+                $pre->writeImage($path);
+                $pre->clear();
+            } catch (\Throwable $e) {
+                // Let the main pipeline throw and take the fallback branch.
+            }
+        }
     }
 
     /*
