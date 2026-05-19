@@ -4,6 +4,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Auto-load migrations
+    |--------------------------------------------------------------------------
+    |
+    | When true (the default) the package auto-loads its migrations from
+    | `vendor/blax-software/laravel-files/database/migrations` so a fresh
+    | `composer require` + `php artisan migrate` Just Works™. Set to false
+    | if you publish the migrations and want to manage them yourself — the
+    | package will then defer entirely to your published copies.
+    |
+    | See: laravel-workkit/PRINCIPLES/laravel-composer-packages.md
+    |
+    */
+
+    'run_migrations' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Models
     |--------------------------------------------------------------------------
     |

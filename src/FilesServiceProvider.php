@@ -15,11 +15,40 @@ class FilesServiceProvider extends \Illuminate\Support\ServiceProvider
     public function boot()
     {
         $this->offerPublishing();
+        $this->registerMigrations();
         $this->registerModelBindings();
         $this->registerRoutes();
         $this->registerCommands();
     }
 
+    /**
+     * Auto-load the package's migrations so fresh installs work without
+     * publishing. Disabled via `files.run_migrations = false` for projects
+     * that prefer to publish + manage migrations themselves.
+     *
+     * Follows the hybrid auto-load + publishable pattern documented in
+     * `laravel-workkit/PRINCIPLES/laravel-composer-packages.md`.
+     */
+    protected function registerMigrations(): void
+    {
+        if (! config('files.run_migrations', true)) {
+            return;
+        }
+
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+    }
+
+    /**
+     * Set up publishing of config and migrations for `php artisan vendor:publish`.
+     *
+     * Migrations are published preserving the SOURCE filename — the
+     * migrations table records filenames, so keeping them identical means
+     * any migration already executed via auto-load is recognised as run
+     * for the published copy too. Slap a fresh `date('Y_m_d_His')` on the
+     * publish destination and Laravel sees a brand-new migration and runs
+     * it again, causing the "table already exists" failures consumers used
+     * to hit before this rewrite.
+     */
     protected function offerPublishing()
     {
         if (! $this->app->runningInConsole()) {
@@ -28,23 +57,24 @@ class FilesServiceProvider extends \Illuminate\Support\ServiceProvider
 
         $this->publishes([
             __DIR__ . '/../config/files.php' => $this->app->configPath('files.php'),
-        ], 'files-config');
+        ], ['files-config', 'config']);
 
-        $this->publishes([
-            __DIR__ . '/../database/migrations/create_blax_files_table.php.stub' => $this->getMigrationFileName('create_blax_files_table.php'),
-            __DIR__ . '/../database/migrations/create_blax_filables_table.php.stub' => $this->getMigrationFileName('create_blax_filables_table.php'),
-        ], 'files-migrations');
-    }
+        $migrationsPath = __DIR__ . '/../database/migrations';
+        $publishMap = [];
+        foreach (glob($migrationsPath . '/*.php') as $sourcePath) {
+            $publishMap[$sourcePath] = $this->app->databasePath('migrations/' . basename($sourcePath));
+        }
 
-    protected function getMigrationFileName(string $migrationFileName): string
-    {
-        $timestamp = date('Y_m_d_His');
-        $filesystem = $this->app->make(\Illuminate\Filesystem\Filesystem::class);
+        $this->publishes($publishMap, ['files-migrations', 'migrations']);
 
-        return \Illuminate\Support\Collection::make([$this->app->databasePath() . DIRECTORY_SEPARATOR . 'migrations' . DIRECTORY_SEPARATOR])
-            ->flatMap(fn($path) => $filesystem->glob($path . '*_' . $migrationFileName))
-            ->push($this->app->databasePath() . "/migrations/{$timestamp}_{$migrationFileName}")
-            ->first();
+        // Convenience tag: publish everything the package owns in one go.
+        $this->publishes(
+            array_merge(
+                [__DIR__ . '/../config/files.php' => $this->app->configPath('files.php')],
+                $publishMap,
+            ),
+            'files',
+        );
     }
 
     protected function registerModelBindings(): void
