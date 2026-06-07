@@ -2,43 +2,13 @@
 
 namespace Blax\Files\Tests\Unit;
 
-use Blax\Files\FilesServiceProvider;
 use Blax\Files\Models\File;
 use Blax\Files\Services\WarehouseService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Blax\Files\Tests\TestCase;
 use Illuminate\Support\Facades\Storage;
-use Orchestra\Testbench\TestCase;
 
 class WarehouseServiceTest extends TestCase
 {
-    use RefreshDatabase;
-
-    protected function getPackageProviders($app): array
-    {
-        return [FilesServiceProvider::class];
-    }
-
-    protected function defineEnvironment($app): void
-    {
-        $app['config']->set('database.default', 'testing');
-        $app['config']->set('database.connections.testing', [
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-            'prefix' => '',
-        ]);
-        $app['config']->set('app.key', 'base64:' . base64_encode(random_bytes(32)));
-    }
-
-    protected function defineDatabaseMigrations(): void
-    {
-        $this->loadMigrationsFrom(__DIR__ . '/../../workbench/database/migrations');
-    }
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        Storage::fake('local');
-    }
 
     // ─── searchFile — UUID lookup ──────────────────────────────────
 
@@ -138,6 +108,17 @@ class WarehouseServiceTest extends TestCase
         $this->assertNotNull($result);
         // svg comes first in preferred_extensions
         $this->assertEquals('svg', $result->extension);
+    }
+
+    public function test_search_returns_null_when_asset_genuinely_missing()
+    {
+        // Exercises the clearstatcache-and-retry branch in searchAssetPath:
+        // both resolution attempts miss, so the method must cleanly return null
+        // (no loop, no error) and let searchFile fall through to storage lookup.
+        $request = new \Illuminate\Http\Request;
+        $result = WarehouseService::searchFile($request, 'images/does-not-exist');
+
+        $this->assertNull($result);
     }
 
     // ─── searchFile — storage path ─────────────────────────────────

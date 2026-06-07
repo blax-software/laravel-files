@@ -71,8 +71,31 @@ class WarehouseService
 
     /**
      * Search for a static asset, trying preferred extensions.
+     *
+     * On a miss the realpath/stat cache is cleared and the lookup retried once:
+     * an asset can be written by another process (an image-generation command,
+     * a queue worker) *after* this PHP process last stat()'d the path, so a
+     * stale negative cache entry would otherwise 404 a file that exists on disk
+     * until the process restarts. Only misses pay this cost — hits return on the
+     * first attempt and never reach the retry.
      */
     protected static function searchAssetPath(string $path): ?File
+    {
+        $found = static::resolveAssetPath($path);
+        if ($found) {
+            return $found;
+        }
+
+        clearstatcache(true);
+
+        return static::resolveAssetPath($path);
+    }
+
+    /**
+     * Resolve an asset path to a (non-persisted) File: exact path first, then
+     * the configured preferred extensions when the path carries none.
+     */
+    protected static function resolveAssetPath(string $path): ?File
     {
         $disk = config('files.disk', 'local');
         $extensions = config('files.optimization.preferred_extensions', ['svg', 'webp', 'png', 'jpg', 'jpeg']);

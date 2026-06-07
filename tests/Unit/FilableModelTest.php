@@ -3,42 +3,13 @@
 namespace Blax\Files\Tests\Unit;
 
 use Blax\Files\Enums\FileLinkType;
-use Blax\Files\FilesServiceProvider;
 use Blax\Files\Models\Filable;
 use Blax\Files\Models\File;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Blax\Files\Tests\TestCase;
 use Illuminate\Support\Facades\Storage;
-use Orchestra\Testbench\TestCase;
 
 class FilableModelTest extends TestCase
 {
-    use RefreshDatabase;
-
-    protected function getPackageProviders($app): array
-    {
-        return [FilesServiceProvider::class];
-    }
-
-    protected function defineEnvironment($app): void
-    {
-        $app['config']->set('database.default', 'testing');
-        $app['config']->set('database.connections.testing', [
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-            'prefix' => '',
-        ]);
-    }
-
-    protected function defineDatabaseMigrations(): void
-    {
-        $this->loadMigrationsFrom(__DIR__ . '/../../workbench/database/migrations');
-    }
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        Storage::fake('local');
-    }
 
     // ─── scopeAs ───────────────────────────────────────────────────
 
@@ -188,36 +159,26 @@ class FilableModelTest extends TestCase
 
     public function test_default_ordering_by_order_column()
     {
-        $file = File::create([
-            'name' => 'test',
-            'extension' => 'png',
-            'type' => 'image/png',
-            'disk' => 'local',
-        ]);
+        // Three DISTINCT files attached to the same host as 'gallery'. They must
+        // be distinct files so they don't collide on the real
+        // (file_id, filable_type, filable_id, as) unique constraint; inserted
+        // out of order to prove the global `ordered` scope sorts ascending.
+        foreach ([3, 1, 2] as $order) {
+            $file = File::create([
+                'name' => 'test',
+                'extension' => 'png',
+                'type' => 'image/png',
+                'disk' => 'local',
+            ]);
 
-        Filable::create([
-            'file_id' => $file->id,
-            'filable_id' => 1,
-            'filable_type' => 'App\Models\User',
-            'as' => 'gallery',
-            'order' => 3,
-        ]);
-
-        Filable::create([
-            'file_id' => $file->id,
-            'filable_id' => 1,
-            'filable_type' => 'App\Models\User',
-            'as' => 'gallery',
-            'order' => 1,
-        ]);
-
-        Filable::create([
-            'file_id' => $file->id,
-            'filable_id' => 1,
-            'filable_type' => 'App\Models\User',
-            'as' => 'gallery',
-            'order' => 2,
-        ]);
+            Filable::create([
+                'file_id' => $file->id,
+                'filable_id' => 1,
+                'filable_type' => 'App\Models\User',
+                'as' => 'gallery',
+                'order' => $order,
+            ]);
+        }
 
         $filables = Filable::where('filable_type', 'App\Models\User')->get();
         $this->assertEquals(1, $filables[0]->order);

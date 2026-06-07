@@ -2,43 +2,14 @@
 
 namespace Blax\Files\Tests\Unit;
 
-use Blax\Files\FilesServiceProvider;
 use Blax\Files\Models\File;
 use Blax\Files\Services\ChunkUploadService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Blax\Files\Tests\TestCase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Orchestra\Testbench\TestCase;
 
 class ChunkUploadServiceTest extends TestCase
 {
-    use RefreshDatabase;
-
-    protected function getPackageProviders($app): array
-    {
-        return [FilesServiceProvider::class];
-    }
-
-    protected function defineEnvironment($app): void
-    {
-        $app['config']->set('database.default', 'testing');
-        $app['config']->set('database.connections.testing', [
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-            'prefix' => '',
-        ]);
-    }
-
-    protected function defineDatabaseMigrations(): void
-    {
-        $this->loadMigrationsFrom(__DIR__ . '/../../workbench/database/migrations');
-    }
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        Storage::fake('local');
-    }
 
     // ─── initialize ────────────────────────────────────────────────
 
