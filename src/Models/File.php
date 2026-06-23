@@ -158,6 +158,24 @@ class File extends Model
 
     /*
     |--------------------------------------------------------------------------
+    | Access Control
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Decide whether the given user (null = guest) may fetch this file.
+     *
+     * The base model treats every file as public so existing consumers are
+     * unaffected. Apps that need serve-time privacy override this (and enable
+     * `files.access_control.enabled`) to gate avatars, private uploads, etc.
+     */
+    public function canBeAccessedBy(?\Illuminate\Contracts\Auth\Authenticatable $user): bool
+    {
+        return true;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | File Content Operations
     |--------------------------------------------------------------------------
     */

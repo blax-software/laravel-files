@@ -17,8 +17,23 @@ class FilesServiceProvider extends \Illuminate\Support\ServiceProvider
         $this->offerPublishing();
         $this->registerMigrations();
         $this->registerModelBindings();
+        $this->registerMiddleware();
         $this->registerRoutes();
         $this->registerCommands();
+    }
+
+    /**
+     * Expose the serve-time access-control middleware under the `files.access`
+     * alias so host apps that wire their own warehouse route can guard it with
+     * `->middleware('files.access')`. The package's own route attaches the
+     * middleware class directly (see routes/files.php).
+     */
+    protected function registerMiddleware(): void
+    {
+        $this->app['router']->aliasMiddleware(
+            'files.access',
+            Http\Middleware\FileAccessControl::class,
+        );
     }
 
     /**

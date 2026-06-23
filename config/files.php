@@ -83,6 +83,17 @@ return [
         'enabled'    => true,
         'prefix'     => 'warehouse',
         'middleware' => ['web'],
+
+        /*
+        | Resolver used by the access-control middleware to find the file for a
+        | warehouse request. A class implementing
+        | Blax\Files\Contracts\ResolvesWarehouseFiles (or any invokable). When
+        | null, the package WarehouseService is used. Host apps with a custom
+        | lookup flow (encrypted ids, client/server assets, …) point this at
+        | their own resolver so the middleware reuses it. Keep this a class
+        | string — closures here would break `config:cache`.
+        */
+        'resolver'   => env('FILES_WAREHOUSE_RESOLVER'),
     ],
 
     /*
@@ -123,13 +134,16 @@ return [
     | Access Control
     |--------------------------------------------------------------------------
     |
-    | When laravel-roles is installed, files can be protected via access
-    | checks. Set 'enabled' to false to serve all files publicly.
+    | When enabled, the FileAccessControl middleware enforces the File model's
+    | canBeAccessedBy() decision on every warehouse request and 403s anyone who
+    | is not allowed. Default false = serve all files publicly (backwards
+    | compatible). Override canBeAccessedBy() on your File model to define the
+    | per-file policy.
     |
     */
 
     'access_control' => [
-        'enabled' => false,
+        'enabled' => env('FILES_ACCESS_CONTROL', false),
     ],
 
 ];
