@@ -127,6 +127,13 @@ return [
         'round_to'           => 50,
         'skip_formats'       => ['gif', 'svg', 'svg+xml'],
         'preferred_extensions' => ['svg', 'webp', 'png', 'jpg', 'jpeg'],
+
+        // Decompression-bomb guard. Decoding an image allocates ~4 bytes/pixel,
+        // so a very large source (e.g. a 74-megapixel upload) can blow the PHP
+        // memory_limit with an UNCATCHABLE fatal that 500s the warehouse request.
+        // When the source exceeds this pixel budget, resizing is skipped and the
+        // original is served instead. 0 disables the guard.
+        'max_source_megapixels' => 40,
     ],
 
     /*

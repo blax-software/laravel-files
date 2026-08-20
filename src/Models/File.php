@@ -434,6 +434,33 @@ class File extends Model
             . (isset($pi['extension']) ? '.' . $pi['extension'] : '');
 
         try {
+            // Decompression-bomb / oversized-source guard. Both healCorruptPng()
+            // and Spatie's decode below fully rasterize the image (~4 bytes/pixel
+            // in GD/ImageMagick), so a very large source can exhaust the PHP
+            // memory_limit — an UNCATCHABLE fatal the catch below cannot recover,
+            // which 500s the request (GlitchTip "Allowed memory size exhausted").
+            // getimagesize() reads only the header, so this is cheap: when the
+            // source blows the pixel budget, skip resizing and serve the original.
+            $maxMp = (float) config('files.optimization.max_source_megapixels', 40);
+            if ($maxMp > 0) {
+                $dims = @getimagesize($path);
+                if (is_array($dims) && isset($dims[0], $dims[1]) && $dims[0] > 0 && $dims[1] > 0) {
+                    $megapixels = ($dims[0] * $dims[1]) / 1_000_000;
+                    if ($megapixels > $maxMp) {
+                        if (function_exists('logger')) {
+                            logger()->warning('laravel-files: source image exceeds resize budget; serving original', [
+                                'file'        => $path,
+                                'dimensions'  => $dims[0] . 'x' . $dims[1],
+                                'megapixels'  => round($megapixels, 1),
+                                'budget_mp'   => $maxMp,
+                            ]);
+                        }
+
+                        return $path;
+                    }
+                }
+            }
+
             copy($path, $tmpPath);
 
             // Some PNGs in storage ship with a miscomputed IDAT CRC, or were
