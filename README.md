@@ -97,6 +97,12 @@ composer test
 
 ---
 
+## Maintainer
+
+Maintained by [Blax Software](https://www.blax.at/laravel), a software practice in Austria. Bugs and pull requests go to this repository; for project work, write to office@blax.at.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
